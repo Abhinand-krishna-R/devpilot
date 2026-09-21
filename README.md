@@ -170,22 +170,36 @@ devpilot/
   devpilot/
     analyzers/
       security.py        # Bandit wrapper + severity summarization
-      code_review.py      # Radon complexity/maintainability + AST style checks
-      architecture.py      # Import graph, coupling, circular import detection
+      code_review.py     # Radon complexity/maintainability + AST style checks
+      architecture.py    # Import graph, coupling, circular import detection
     utils/
-      llm_summary.py      # Sends findings to Claude, gets prioritized summary
+      llm_summary.py     # Sends findings to Claude, gets prioritized summary
     core.py               # Orchestrates analyzers -> shared by CLI and MCP
     cli.py                # Click-based CLI
     mcp_server.py         # MCP server exposing the same skills as tools
     validation.py         # Shared project-path validation for CLI and MCP
     __main__.py           # Enables `python -m devpilot`
   tests/                  # pytest suite (analyzers, CLI, MCP, path validation)
-  sample_project/         # Deliberately vulnerable demo — see its own README
+  sample_project/         # Deliberately vulnerable demo project for testing
   .github/workflows/ci.yml
   pyproject.toml          # Packaging, dependency pins, ruff + pytest config
   requirements.txt        # Mirrors the runtime pins in pyproject.toml
   LICENSE
 ```
+
+Two files are worth calling out specifically, since their purpose isn't
+obvious from the name alone:
+
+- **`validation.py`** centralizes the "does this path exist and is it a
+  directory" check that every entry point needs. Both the CLI and the MCP
+  server import from here rather than each rolling their own check, so a
+  bad path fails the same way (a specific, catchable `InvalidProjectPath`
+  exception) no matter which interface you're using.
+- **`__main__.py`** is what makes `python -m devpilot ...` work as an
+  alternative to the installed `devpilot` console script. It matters on
+  Windows, where the console script's location often isn't on PATH by
+  default — `python -m devpilot` sidesteps that entirely since it only
+  needs `python` itself to be callable (see Troubleshooting).
 
 ## Troubleshooting
 
@@ -195,6 +209,21 @@ devpilot/
    and similar tools keep the old PATH until the whole app restarts.
 3. In a new window, run `Get-Command devpilot`. For a pipx install it should
    point at `C:\Users\<you>\.local\bin\devpilot.exe`.
+
+**`--json` output redirected to a file fails with `JSONDecodeError: Expecting value` when read back**
+This is a PowerShell quirk, not a DevPilot bug. Windows PowerShell (the
+`powershell.exe` that ships with Windows, as opposed to PowerShell 7/`pwsh`)
+writes `>` and `>>` redirected output as UTF-16LE with a byte-order-mark by
+default, not UTF-8 — so `devpilot review . --json > out.json` produces a file
+whose first two bytes are `FF FE`, which `json.load()` (or any UTF-8 reader)
+can't parse. Fixes, in order of preference:
+- Use PowerShell 7 (`pwsh`) instead of Windows PowerShell — it defaults to
+  UTF-8 for redirection.
+- Or explicitly force UTF-8: `devpilot review . --json | Out-File -Encoding utf8 out.json`
+- Or avoid the shell redirection entirely and write the file from Python,
+  e.g. `python -c "import subprocess,json; ..."` capturing `stdout` directly
+  (this is also what a CI step or another program calling DevPilot should
+  do, rather than shelling out through `>`).
 
 To refresh a stale PowerShell session without restarting it:
 ```powershell
@@ -237,13 +266,21 @@ tree for editing:
 
 ```bash
 pip install -e ".[dev]"
+ruff check devpilot/ tests/
+ruff format --check devpilot/ tests/
 pytest tests/ -v
 ```
 
-CI (`.github/workflows/ci.yml`) runs this suite on Python 3.10–3.12 on Linux
-plus Python 3.12 on Windows, on every push and PR. It also lints and checks
-formatting with ruff, and dogfoods DevPilot by running its own code-review
-skill against its own source as a smoke test.
+CI (`.github/workflows/ci.yml`) runs this exact sequence — lint, format
+check, and tests — on Python 3.10–3.12 on Linux for every push and PR, plus
+a separate job running the test suite on Python 3.12 on Windows, and
+dogfoods DevPilot by running its own code-review skill against its own
+source as a smoke test. `ruff check` and `ruff format --check` are two
+different tools checking two different things (lint rules vs. consistent
+style) — a file can pass one and fail the other, so both run in CI. Before
+opening a pull request, run `ruff format devpilot/ tests/` (no `--check`)
+to auto-fix formatting, not just `ruff check --fix`, which won't catch
+formatting-only issues.
 
 ## Testing DevPilot on itself (dogfooding)
 
@@ -285,31 +322,3 @@ which silently hid real circular imports and coupling).
 - Add a "Figma-to-code" skill as a fourth tool.
 - Cache analysis results per-commit so re-running on an unchanged file is instant.
 - Add a `--diff` mode that only analyzes files changed in the current git branch.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-## Contributing
-
-Contributions are welcome. Before opening a pull request:
-
-1. Install the dev dependencies into a virtual environment:
-   `pip install -e ".[dev]"`
-2. Run exactly the checks CI runs, and make sure all three pass:
-
-   ```bash
-   ruff check devpilot/ tests/
-   ruff format --check devpilot/ tests/
-   pytest tests/ -v
-   ```
-
-3. Keep the analyzers dependency-light. DevPilot deliberately builds on
-   standard, well-known tools (Bandit, Radon) rather than a large framework,
-   so a new runtime dependency needs a strong justification.
-4. If you change what an analyzer returns, update the tests under `tests/` —
-   the suite doubles as the specification for the JSON shape each skill
-   returns.
-
-CI must be green on Python 3.10–3.12 (Linux) and 3.12 (Windows) before a pull
-request can be merged.
