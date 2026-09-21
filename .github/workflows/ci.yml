@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: this workflow only ever reads the repository.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref so rapid pushes don't queue up.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python-version }}, Linux)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install DevPilot with dev dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint with ruff
+        run: ruff check devpilot/ tests/
+
+      - name: Check formatting with ruff
+        run: ruff format --check devpilot/ tests/
+
+      - name: Run test suite
+        run: pytest tests/ -v
+
+      - name: Dogfood - review DevPilot's own source
+        env:
+          DOGFOOD_JSON: ${{ runner.temp }}/dogfood.json
+        run: |
+          python -m devpilot review devpilot --no-llm --json > "$DOGFOOD_JSON"
+          python -c "import json, os; findings = json.load(open(os.environ['DOGFOOD_JSON']))['findings']; assert findings['files_analyzed'] > 0, 'dogfood run analyzed no files'; print('files_analyzed:', findings['files_analyzed'])"
+
+  # The README documents Windows setup in detail, and the CLI/MCP entry points
+  # have Windows-specific path handling, so the suite runs there too.
+  test-windows:
+    name: Tests (Python 3.12, Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install DevPilot with dev dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run test suite
+        run: pytest tests/ -q

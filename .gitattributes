@@ -1,0 +1,26 @@
+# Line endings.
+#
+# Store every text file as LF in the repository, no matter which OS it was
+# written on. DevPilot is developed on Windows but CI runs on Linux, so
+# without this rule CRLF endings leak into history and every cross-platform
+# edit shows up as a whole-file diff.
+* text=auto eol=lf
+
+# Windows-native scripts must keep CRLF to execute correctly.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary formats: git must never attempt text conversion or line-based
+# diffing on these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.whl binary
+*.pyc binary
+*.so binary

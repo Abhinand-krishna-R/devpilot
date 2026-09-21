@@ -1,0 +1,7 @@
+# Pinned to exact tested versions. See pyproject.toml for the note on the
+# mcp/starlette vs FastAPI conflict if installing outside an isolated venv.
+bandit==1.9.4
+radon==6.0.1
+mcp[cli]==2.2.0
+anthropic==1.7.0
+click==8.5.0

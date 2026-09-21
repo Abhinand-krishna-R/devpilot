@@ -1,0 +1,72 @@
+[project]
+name = "devpilot"
+version = "0.2.0"
+description = "AI developer assistant: code review, security auditing, and architecture analysis via MCP + CLI."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Abhinand Krishna R" }]
+keywords = [
+    "ai",
+    "code-review",
+    "static-analysis",
+    "security-audit",
+    "architecture",
+    "mcp",
+    "cli",
+    "developer-tools",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Security",
+]
+dependencies = [
+    # Pinned to the exact versions this was built and tested against.
+    # mcp>=2.0 pulls in starlette>=1.0, which conflicts with older FastAPI
+    # apps (FastAPI <0.111 typically pins starlette<0.38). If you're
+    # installing DevPilot alongside a FastAPI project in the SAME
+    # environment, that conflict is real and expected — always install
+    # DevPilot into its own virtualenv (see README) rather than a shared
+    # or global environment to avoid it entirely.
+    "bandit==1.9.4",
+    "radon==6.0.1",
+    "mcp[cli]==2.2.0",
+    "anthropic==1.7.0",
+    "click==8.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.8.4",
+]
+
+[project.scripts]
+devpilot = "devpilot.cli:main"
+
+[build-system]
+# >=77 is required for the PEP 639 license metadata above
+# (license = "MIT" with a separate license-files list).
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["devpilot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
